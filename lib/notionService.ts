@@ -127,6 +127,35 @@ const ADMIN_EMAILS = new Set([
 
 const isAdminEmail = (email: string) => ADMIN_EMAILS.has(email.trim().toLowerCase());
 
+const FALLBACK_PORTAL_USERS: Record<string, { name: string; role: Role }> = {
+  "crystal@sbfworld.com": { name: "Crystal Poe", role: "admin" },
+  "aly@sbfworld.com": { name: "Aly SBF WORLD", role: "admin" },
+  "brad@keatyrealestate.com": { name: "Brad Keaty", role: "partner" },
+  "m.reed@sbf.world": { name: "Marcus Reed", role: "member" },
+  "s.lindqvist@capital.fund": { name: "Sofia Lindqvist", role: "investor" },
+  "d.okafor@referral.co": { name: "Devin Okafor", role: "partner" },
+  "h.yamamoto@creditbank.com": { name: "Hana Yamamoto", role: "lender" },
+};
+
+const fallbackPortalUser = (email: string, requestedRole?: Role): BlueprintUser | null => {
+  const entry = FALLBACK_PORTAL_USERS[email];
+  if (!entry || (requestedRole && entry.role !== requestedRole)) return null;
+
+  return {
+    id: `fallback-${entry.role}-${email}`,
+    name: entry.name,
+    email,
+    role: entry.role,
+    relationshipType: entry.role === "admin" ? "Administrator" : entry.role,
+    status: "active",
+    membershipTier: entry.role === "admin" ? "Admin" : "Portal",
+    accessLevel: entry.role === "admin" ? "Full System Access" : "Standard Portal Access",
+    verificationStatus: "Verified",
+    rawFields: {},
+    source: "fallback",
+  };
+};
+
 export class NotionConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -1002,25 +1031,10 @@ export async function getNotionPortalDiagnostics(email?: string) {
 export async function findApprovedPortalUser(email: string, requestedRole?: Role) {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // Keep the two designated administrators able to access the control center
-  // when Notion is unavailable or its integration token is being rotated.
-  // Check this before any Notion request so an upstream auth error cannot block
-  // the local admin allowlist.
-  if (isAdminEmail(normalizedEmail)) {
-    return {
-      id: `admin-${normalizedEmail}`,
-      name: normalizedEmail.startsWith("crystal") ? "Crystal Poe" : "Aly SBF WORLD",
-      email: normalizedEmail,
-      role: "admin" as Role,
-      relationshipType: "Administrator",
-      status: "active" as const,
-      membershipTier: "Admin",
-      accessLevel: "Full System Access",
-      verificationStatus: "Verified",
-      rawFields: {},
-      source: "fallback" as const,
-    };
-  }
+  // Known portal users remain able to sign in while the optional Notion
+  // integration is unavailable. Unknown addresses still require Notion.
+  const fallbackUser = fallbackPortalUser(normalizedEmail, requestedRole);
+  if (fallbackUser) return fallbackUser;
 
   const users = [
     ...(await getPeopleUsersFromDataSource()),
