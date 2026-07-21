@@ -2,6 +2,9 @@
   "name": "sbf-world-os",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18.17 <23"
+  },
   "description": "SBF WORLD OS — Institutional Capital Deployment System",
   "scripts": {
     "dev": "next dev",
