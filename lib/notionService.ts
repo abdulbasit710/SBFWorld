@@ -1001,6 +1001,27 @@ export async function getNotionPortalDiagnostics(email?: string) {
 
 export async function findApprovedPortalUser(email: string, requestedRole?: Role) {
   const normalizedEmail = email.trim().toLowerCase();
+
+  // Keep the two designated administrators able to access the control center
+  // when Notion is unavailable or its integration token is being rotated.
+  // Check this before any Notion request so an upstream auth error cannot block
+  // the local admin allowlist.
+  if (isAdminEmail(normalizedEmail)) {
+    return {
+      id: `admin-${normalizedEmail}`,
+      name: normalizedEmail.startsWith("crystal") ? "Crystal Poe" : "Aly SBF WORLD",
+      email: normalizedEmail,
+      role: "admin" as Role,
+      relationshipType: "Administrator",
+      status: "active" as const,
+      membershipTier: "Admin",
+      accessLevel: "Full System Access",
+      verificationStatus: "Verified",
+      rawFields: {},
+      source: "fallback" as const,
+    };
+  }
+
   const users = [
     ...(await getPeopleUsersFromDataSource()),
     ...(await getPortalUsersFromDataSource()),
@@ -1008,27 +1029,6 @@ export async function findApprovedPortalUser(email: string, requestedRole?: Role
   ];
 
   const matches = users.filter((candidate) => candidate.email === normalizedEmail);
-
-  if (isAdminEmail(normalizedEmail)) {
-    const matchedAdmin = matches.find((candidate) => candidate.status === "active") ?? matches[0];
-    return {
-      id: matchedAdmin?.id ?? `admin-${normalizedEmail}`,
-      name: matchedAdmin?.name || (normalizedEmail.startsWith("crystal") ? "Crystal Poe" : "Aly SBF WORLD"),
-      email: normalizedEmail,
-      role: "admin" as Role,
-      relationshipType: "Administrator",
-      status: "active" as const,
-      contactId: matchedAdmin?.contactId,
-      membershipTier: matchedAdmin?.membershipTier || "Admin",
-      accessLevel: "Full System Access",
-      interests: matchedAdmin?.interests,
-      ndaStatus: matchedAdmin?.ndaStatus,
-      verificationStatus: matchedAdmin?.verificationStatus || "Verified",
-      passwordHint: matchedAdmin?.passwordHint,
-      rawFields: matchedAdmin?.rawFields ?? {},
-      source: "notion" as const,
-    };
-  }
 
   if (!matches.length) return null;
 
